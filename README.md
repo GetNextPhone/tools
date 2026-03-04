@@ -4,41 +4,86 @@ Give your AI receptionist superpowers. Connect any API as a tool your NextPhone 
 
 ## How it works
 
-NextPhone agents can call **custom tools** mid-conversation. When a caller asks something that requires an external action — looking up a contact, sending an SMS, creating a ticket — the agent triggers your tool automatically.
+NextPhone agents can call **custom tools** mid-conversation. When a caller asks to book an appointment, look up their account, or report an issue — the agent triggers your tool, gets the result, and continues the conversation naturally.
 
 No code required. Define a JSON config, and your agent gets a new capability.
 
-## Quick example
+```
+Caller: "I'd like to book a furnace inspection for next week"
+         ↓
+Agent checks calendar availability → finds 3 open slots
+         ↓
+Agent: "I have Tuesday at 10am, Wednesday at 2pm, or Thursday at 9am. Which works?"
+         ↓
+Caller: "Tuesday at 10"
+         ↓
+Agent books appointment → sends SMS confirmation
+         ↓
+Agent: "You're all set for Tuesday at 10am. You'll get a text confirmation shortly."
+```
 
-Send an SMS confirmation after every booked appointment:
+## Built-in tools
+
+These work out of the box with NextPhone — no configuration needed.
+
+### Calendar availability
+
+The agent checks your calendar for open slots, respects business hours, and presents options to the caller.
+
+- Connects to Google Calendar, Calendly, Cal.com, Acuity
+- Configurable business hours and timezone
+- Adjustable appointment duration and lookahead window
+- Avoids double-booking automatically
+
+### Appointment booking
+
+Once the caller picks a time, the agent books it directly.
+
+- Creates calendar event with caller details
+- Sends calendar invite to both parties
+- Captures caller name, email, phone, and reason for visit
+
+### Call transfer
+
+The agent routes calls to your team when needed.
+
+- Instant transfer to any phone number
+- AI decides when to transfer based on your rules (e.g., "transfer if caller mentions legal emergency")
+- Fallback if transfer fails — agent takes a message instead
+
+### SMS messaging
+
+Send texts during or after calls.
+
+- **Mid-call SMS** — Send booking links, directions, rate sheets while the caller is still on the line
+- **Follow-up SMS** — Confirmation texts after appointments are booked
+- **Missed call text-back** — Automatically text callers you couldn't reach
+
+## Custom tools
+
+Beyond the built-ins, you can connect **any REST API** as a tool. The agent calls it mid-conversation, gets the result, and keeps talking.
+
+### Quick example
+
+Notify your Slack channel when a call is missed:
 
 ```json
 {
   "type": "http",
-  "tool_name": "send_confirmation_sms",
-  "description": "Send SMS confirmation to caller after booking",
-  "url": "https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+  "tool_name": "slack_missed_call",
+  "description": "Notify team in Slack when a call is missed",
+  "url": "https://hooks.slack.com/services/{your_webhook_url}",
   "http_method": "POST",
-  "headers": {
-    "Authorization": "Basic {your_twilio_credentials}"
-  },
   "body_template": {
-    "To": "{{caller_number}}",
-    "From": "+15551234567",
-    "Body": "Your appointment with {{owner_name}} is confirmed for {{date}} at {{time}}."
+    "text": "Missed call from {{caller_number}} ({{caller_name}})\n\nSummary: {{summary}}"
   },
-  "parameters": [
-    { "name": "date", "type": "string", "description": "Appointment date", "required": true },
-    { "name": "time", "type": "string", "description": "Appointment time", "required": true }
-  ],
+  "parameters": [],
   "post_call": true,
-  "when": "BOOKED"
+  "when": "MISSED"
 }
 ```
 
-The agent extracts `date` and `time` from the conversation. `{{caller_number}}` and `{{owner_name}}` are injected automatically from the call context.
-
-## Tool config schema
+### Tool config schema
 
 ```json
 {
@@ -72,7 +117,7 @@ The agent extracts `date` and `time` from the conversation. `{{caller_number}}` 
 | `post_call` | No | Fire after call ends instead of during. Default: `false` |
 | `when` | No | Post-call only: trigger condition (`BOOKED`, `TRANSFERRED`, `MISSED`, `SPAM`) |
 
-## Available placeholders
+### Available placeholders
 
 These are automatically available in any `body_template` or `url`:
 
@@ -89,15 +134,17 @@ These are automatically available in any `body_template` or `url`:
 
 Plus any custom `parameters` you define — the agent extracts these from the conversation automatically.
 
-## Examples
+## Example tools
 
 ### Search CRM before answering
+
+Look up the caller in HubSpot so the agent can greet them by name and reference their history.
 
 ```json
 {
   "type": "http",
   "tool_name": "search_contacts",
-  "description": "Search for caller in CRM when they provide their name",
+  "description": "Search for caller in CRM to personalize the conversation",
   "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
   "http_method": "POST",
   "headers": {
@@ -118,33 +165,99 @@ Plus any custom `parameters` you define — the agent extracts these from the co
 }
 ```
 
-The agent searches HubSpot by caller's phone number, gets their record, and can reference their name, company, and history in the conversation.
+**Result:** Agent says "Hi Sarah, I see you're a current customer. How can I help?" instead of "Can I get your name?"
 
-### Post to Slack on missed calls
+### Create a job in ServiceTitan
+
+When a caller needs service, the agent creates a job directly in your field service software.
 
 ```json
 {
   "type": "http",
-  "tool_name": "slack_missed_call",
-  "description": "Notify team in Slack when a call is missed",
-  "url": "https://hooks.slack.com/services/{your_webhook_url}",
+  "tool_name": "create_service_job",
+  "description": "Create a new service job when caller needs HVAC, plumbing, or electrical work",
+  "url": "https://api.servicetitan.io/jpm/v2/tenant/{tenant_id}/jobs",
   "http_method": "POST",
-  "body_template": {
-    "text": "Missed call from {{caller_number}} ({{caller_name}})\n\nSummary: {{summary}}"
+  "headers": {
+    "Authorization": "Bearer {your_servicetitan_key}",
+    "ST-App-Key": "{your_app_key}"
   },
-  "parameters": [],
-  "post_call": true,
-  "when": "MISSED"
+  "body_template": {
+    "customerId": "{{customer_id}}",
+    "typeId": "{{job_type}}",
+    "summary": "{{job_description}}",
+    "priority": "{{urgency}}"
+  },
+  "parameters": [
+    { "name": "customer_id", "type": "string", "description": "Customer ID from CRM lookup", "required": true },
+    { "name": "job_type", "type": "string", "description": "Type of service needed", "required": true },
+    { "name": "job_description", "type": "string", "description": "Description of the issue", "required": true },
+    { "name": "urgency", "type": "string", "description": "Priority: normal, high, emergency", "required": false }
+  ],
+  "return_response": true,
+  "response_extract": "id",
+  "success_message": "Job created"
 }
 ```
 
-### Create a support ticket
+### Send SMS with booking link
+
+During the call, text the caller a link to self-book if they want to pick their own time.
+
+```json
+{
+  "type": "http",
+  "tool_name": "send_booking_link",
+  "description": "Send the caller a text with the booking link when they want to schedule online",
+  "url": "https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json",
+  "http_method": "POST",
+  "headers": {
+    "Authorization": "Basic {your_twilio_credentials}"
+  },
+  "body_template": {
+    "To": "{{caller_number}}",
+    "From": "{{receiving_number}}",
+    "Body": "Here's the link to book your appointment: {{booking_url}}"
+  },
+  "parameters": [],
+  "return_response": false,
+  "success_message": "Booking link sent"
+}
+```
+
+**Result:** Agent says "I just texted you a link to book online. You should see it now."
+
+### Log call to Google Sheets
+
+Keep a simple call log for businesses that don't use a CRM.
+
+```json
+{
+  "type": "http",
+  "tool_name": "log_to_sheets",
+  "description": "Log call details to Google Sheets after every call",
+  "url": "https://script.google.com/macros/s/{your_script_id}/exec",
+  "http_method": "POST",
+  "body_template": {
+    "caller": "{{caller_number}}",
+    "name": "{{caller_name}}",
+    "summary": "{{summary}}",
+    "outcome": "{{outcome}}"
+  },
+  "parameters": [],
+  "post_call": true
+}
+```
+
+### Create support ticket
+
+When a caller reports an issue, the agent creates a ticket in your helpdesk.
 
 ```json
 {
   "type": "http",
   "tool_name": "create_ticket",
-  "description": "Create a support ticket when caller reports an issue",
+  "description": "Create a support ticket when caller reports a problem or issue",
   "url": "https://your-helpdesk.com/api/tickets",
   "http_method": "POST",
   "headers": {
@@ -167,6 +280,30 @@ The agent searches HubSpot by caller's phone number, gets their record, and can 
 }
 ```
 
+### Webhook — trigger anything
+
+Fire a generic webhook to Zapier, Make, or your own backend after specific call outcomes.
+
+```json
+{
+  "type": "http",
+  "tool_name": "webhook_new_lead",
+  "description": "Send new lead data to webhook after qualifying calls",
+  "url": "https://hooks.zapier.com/hooks/catch/{your_zap_id}",
+  "http_method": "POST",
+  "body_template": {
+    "event": "new_lead",
+    "caller_number": "{{caller_number}}",
+    "caller_name": "{{caller_name}}",
+    "summary": "{{summary}}",
+    "business_number": "{{receiving_number}}"
+  },
+  "parameters": [],
+  "post_call": true,
+  "when": "BOOKED,TRANSFERRED"
+}
+```
+
 ## How the agent uses tools
 
 1. Caller says something that matches a tool's `description`
@@ -176,9 +313,10 @@ The agent searches HubSpot by caller's phone number, gets their record, and can 
 5. Response (or `success_message`) is returned to the agent
 6. Agent continues the conversation with the result
 
-For `post_call` tools, steps 1-2 are skipped — the tool fires automatically after the call ends based on the `when` condition.
+For `post_call` tools, the tool fires automatically after the call ends based on the `when` condition.
 
 ## Links
 
 - [NextPhone](https://www.getnextphone.com) — AI answering service for small businesses
 - [Live demo](https://www.getnextphone.com/demo) — Call and talk to an AI receptionist
+- [Blog](https://www.getnextphone.com/blog)
