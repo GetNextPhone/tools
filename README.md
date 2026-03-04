@@ -167,39 +167,6 @@ Look up the caller in HubSpot so the agent can greet them by name and reference 
 
 **Result:** Agent says "Hi Sarah, I see you're a current customer. How can I help?" instead of "Can I get your name?"
 
-### Create a job in ServiceTitan
-
-When a caller needs service, the agent creates a job directly in your field service software.
-
-```json
-{
-  "type": "http",
-  "tool_name": "create_service_job",
-  "description": "Create a new service job when caller needs HVAC, plumbing, or electrical work",
-  "url": "https://api.servicetitan.io/jpm/v2/tenant/{tenant_id}/jobs",
-  "http_method": "POST",
-  "headers": {
-    "Authorization": "Bearer {your_servicetitan_key}",
-    "ST-App-Key": "{your_app_key}"
-  },
-  "body_template": {
-    "customerId": "{{customer_id}}",
-    "typeId": "{{job_type}}",
-    "summary": "{{job_description}}",
-    "priority": "{{urgency}}"
-  },
-  "parameters": [
-    { "name": "customer_id", "type": "string", "description": "Customer ID from CRM lookup", "required": true },
-    { "name": "job_type", "type": "string", "description": "Type of service needed", "required": true },
-    { "name": "job_description", "type": "string", "description": "Description of the issue", "required": true },
-    { "name": "urgency", "type": "string", "description": "Priority: normal, high, emergency", "required": false }
-  ],
-  "return_response": true,
-  "response_extract": "id",
-  "success_message": "Job created"
-}
-```
-
 ### Send SMS with booking link
 
 During the call, text the caller a link to self-book if they want to pick their own time.
@@ -318,5 +285,4 @@ For `post_call` tools, the tool fires automatically after the call ends based on
 ## Links
 
 - [NextPhone](https://www.getnextphone.com) — AI answering service for small businesses
-- [Live demo](https://www.getnextphone.com/demo) — Call and talk to an AI receptionist
 - [Blog](https://www.getnextphone.com/blog)
